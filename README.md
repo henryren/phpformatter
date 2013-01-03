@@ -17,4 +17,4 @@ This code is licensed under the MIT license included. See http://nathan.ca/code/
 
 For more information about this formatter, see http://nathan.ca/2013/01/php-formatter
 
-Last updated: January 1, 2013
+Last updated: January 2, 2013

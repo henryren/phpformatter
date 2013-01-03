@@ -6,7 +6,7 @@
  *
  * Licensed under the MIT licensed at http://nathan.ca/code/license
  *
- * Last updated January 1, 2013
+ * Last updated January 2, 2013
  *
  */
 
