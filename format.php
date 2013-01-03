@@ -93,9 +93,9 @@ class Formatter
 		// alternately a callback function can be specified to offer context-aware replacements
 		$replacements = array(T_ABSTRACT => 'abstract ', T_AND_EQUAL => ' &= ', T_ARRAY =>
 				'array',
-			T_ARRAY_CAST => '(array)', T_AS => ' as ', T_BAD_CHARACTER => '$$',
+			T_ARRAY_CAST => '(array) ', T_AS => ' as ', T_BAD_CHARACTER => '$$',
 			T_BOOLEAN_AND => ' && ',
-			T_BOOLEAN_OR => ' || ', T_BOOL_CAST => '(bool)', T_BREAK => 'break', T_CASE =>
+			T_BOOLEAN_OR => ' || ', T_BOOL_CAST => '(bool) ', T_BREAK => 'break', T_CASE =>
 				'case ',
 			T_CHARACTER => '$$', T_CLASS_C => '__CLASS__', T_CLONE => 'clone ',
 			T_CONCAT_EQUAL => ' .= ',
@@ -105,7 +105,7 @@ class Formatter
 			T_DIV_EQUAL => ' /= ',
 			T_DNUMBER => ' $$ ', T_DOC_COMMENT => '$$', T_DOLLAR_OPEN_CURLY_BRACES => '$$',
 			T_DOUBLE_ARROW => ' => ',
-			T_DOUBLE_CAST => '(double)', T_DOUBLE_COLON => '::', T_ECHO => 'echo ', T_EMPTY =>
+			T_DOUBLE_CAST => '(double) ', T_DOUBLE_COLON => '::', T_ECHO => 'echo ', T_EMPTY =>
 				'empty',
 			T_ENCAPSED_AND_WHITESPACE => '$$', T_ENDDECLARE => 'enddeclare', T_END_HEREDOC =>
 				'$$',
@@ -128,7 +128,7 @@ class Formatter
 			T_MOD_EQUAL => ' %= ', T_MUL_EQUAL => ' *= ', T_NAMESPACE => 'namespace ',
 			T_NS_C => '__NAMESPACE__',
 			T_NS_SEPARATOR => '\\', T_NEW => 'new ', T_NUM_STRING => '$$', T_OBJECT_CAST =>
-				'(object)',
+				'(object) ',
 			T_OBJECT_OPERATOR => '->', T_OPEN_TAG_WITH_ECHO => '<?=', T_OR_EQUAL => ' |= ',
 			T_PAAMAYIM_NEKUDOTAYIM => '::',
 			T_PLUS_EQUAL => ' += ', T_PRINT => 'print', T_PRIVATE => 'private ', T_PUBLIC =>
@@ -137,17 +137,24 @@ class Formatter
 				'require_once ',
 			T_SL => ' << ', T_SL_EQUAL => ' <<= ', T_SR => ' >> ', T_SR_EQUAL => ' >>= ',
 			T_START_HEREDOC => '$$',
-			T_STATIC => 'static ', T_STRING => '$$', T_STRING_CAST => '(string)',
-			T_STRING_VARNAME => '$$',
-			T_THROW => 'throw ', T_UNSET => 'unset', T_UNSET_CAST => '(unset)', T_USE =>
-				' use ',
-			T_VAR => 'var ', T_VARIABLE => '$$', T_XOR_EQUAL => ' ^= ', '+' => ' + ', '-' =>
-				' - ',
-			'*' => ' * ', '/' => ' / ', '%' => ' % ', '.' => ' . ', '>' => ' > ', '<' => ' < ',
-			'=' => ' = ',
-			'!' => '!', '^' => ' ^ ', ',' => ', ', T_COMMENT => function ($v) use 
-				($blankline) {
+			T_STATIC => 'static ', T_STRING_CAST => '(string) ', T_STRING_VARNAME => '$$',
+			T_THROW => 'throw ',
+			T_UNSET => 'unset', T_UNSET_CAST => '(unset) ', T_USE => ' use ', T_VAR => 'var ',
+			T_VARIABLE => '$$',
+			T_XOR_EQUAL => ' ^= ', '+' => ' + ', '-' => ' - ', '*' => ' * ', '/' => ' / ',
+			'%' => ' % ',
+			'.' => ' . ', '>' => ' > ', '<' => ' < ', '=' => ' = ', '!' => '!', '^' => ' ^ ',
+			',' => ', ',
+			T_STRING => function ($v, $t, $tokens, $i) {
+				// class type-hinting
+				if (isset($tokens[$i + 2]) && ($tokens[$i + 1][0] == T_VARIABLE || 
+									($tokens[$i + 1][0] == T_WHITESPACE &&
+									 $tokens[$i + 2][0] == T_VARIABLE)))
+					return $v . ' ';
 				
+				// static scope
+				return $v;
+			}, T_COMMENT => function ($v) use ($blankline) {
 				return rtrim($v) . (substr($v, - 2) == '*/' ||
 						 substr($v, - 1) == "\n" ? $blankline() : '');
 			}, T_RETURN => function ($v, $t, $tokens, $i) use (&$tabs) {
@@ -157,8 +164,7 @@ class Formatter
 				return 'return ';
 			}, T_IF => $control('if '), T_ELSE => function ($v, $t, $tokens, $i) use 
 						(&$lastcontrol, $control, &$tabs, $blankline) {
-				// if we're followed by an "if" (i.e. we're an else-if), don't handle the
-				// else
+				// if we're followed by an "if" (i.e. we're an else-if), don't handle it
 				if ($tokens[$i + 1][0] == T_IF || 
 							($tokens[$i + 1][0] == T_WHITESPACE && $tokens[$i + 2][0] == T_IF))
 					return 'else ';
@@ -171,8 +177,19 @@ class Formatter
 				$lastcontrol = T_ELSE + 200000;
 				$tabs++;
 				return 'else' . $blankline(' ');
-			}, T_DO => function ($v, $t, $tokens, $i) use 
-					(&$lastcontrol, &$control, &$tabs, $blankline) {
+			}, T_TRY => function ($v, $t, $tokens, $i) use 
+					(&$lastcontrol, $control, &$tabs, $blankline) {
+				
+				// immediate control statement
+				$try = $control('try');
+				$try($v, $t, $tokens, $i);
+				
+				// already "past" the condition brackets (so do the ')' handling here)
+				$lastcontrol = T_TRY + 200000;
+				$tabs++;
+				return 'try' . $blankline(' ');
+			}, T_CATCH => $control('catch'), T_DO => function ($v, $t, $tokens, $i) use 
+						(&$lastcontrol, &$control, &$tabs, $blankline) {
 				// treat "do" just like "else"
 				$do = $control('do');
 				$do($v, $t, $tokens, $i);
@@ -228,7 +245,8 @@ class Formatter
 				$uncontrol();
 				
 				// handle brackets in expressions versus in statements
-				if ($tokens[$i + 1] == ';' || $tokens[$i + 1] == ',' || $tokens[$i + 1] == ')')
+				if (isset($tokens[$i + 1]) && ($tokens[$i + 1] == ';' ||
+							 $tokens[$i + 1] == ',' || $tokens[$i + 1] == ')'))
 				{
 					$lambda = false;
 					return '}';
@@ -1046,9 +1064,6 @@ class Formatter
 	// Format the code in the specified file (a handy static function to kick things off)
 	static function FormatFile($file)
 	{
-		if (!file_exists($file))
-			return false;
-		
 		$f = new Formatter(file_get_contents($file));
 		
 		return $f->format();
@@ -1056,14 +1071,19 @@ class Formatter
 }
 
 // run it as a command line tool
-if ($_SERVER['argc'] < 2)
+$argc = $_SERVER['argc'];
+$argv = $_SERVER['argv'];
+
+if ($argc < 2)
 {
-	printf("Usage: %s input file [output file]\n", $_SERVER['argv'][0]);
+	printf("Usage: %s input file [output file]\n" . "Input file can be '-' for stdin, " .
+			"and output can be '_' for same as input.\n\n",
+		$argv[0]);
 	exit(0);
 }
-$out = Formatter::FormatFile($_SERVER['argv'][1]);
-if ($_SERVER['argc'] > 2)
-	file_put_contents($_SERVER['argv'][2], $out);
+
+$out = Formatter::FormatFile($argv[1] == '-' ? 'php://stdin' : $argv[1]);
+if ($argc > 2)
+	file_put_contents($argv[2] = '_' ? $argv[1] : $argv[2], $out);
 else
 	echo $out;
-

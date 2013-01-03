@@ -1,0 +1,3 @@
+# place this file in your ~/bin and make the path to format.php absolute.
+php -q format.php %*
+
